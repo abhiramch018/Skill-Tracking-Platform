@@ -16,18 +16,18 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [captchaReset, setCaptchaReset] = useState(0);
-    const captchaRef = useRef({ id: '', answer: '' });
+    const captchaRef = useRef('');
 
-    const handleCaptchaVerify = (id, answer) => {
-        captchaRef.current = { id, answer };
+    const handleCaptchaVerify = (token) => {
+        captchaRef.current = token;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
-        if (!captchaRef.current.answer) {
-            setError('Please solve the CAPTCHA before signing in.');
+        if (!captchaRef.current) {
+            setError('Please complete the reCAPTCHA verification.');
             return;
         }
 
@@ -36,8 +36,7 @@ export default function LoginPage() {
         try {
             const res = await API.post('/auth/login/', {
                 ...form,
-                captcha_id: captchaRef.current.id,
-                captcha_answer: captchaRef.current.answer,
+                recaptcha_token: captchaRef.current,
             });
             const { token, user } = res.data;
 
