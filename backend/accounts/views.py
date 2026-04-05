@@ -14,21 +14,6 @@ from rest_framework.authtoken.models import Token
 
 from .models import CustomUser
 from .serializers import RegisterSerializer, LoginSerializer, UserSerializer, AdminUserSerializer
-from .captcha import generate_captcha, verify_captcha
-
-
-# ──────────────────────── CAPTCHA Endpoint ────────────────────────
-
-class CaptchaView(APIView):
-    """Generate a new CAPTCHA challenge."""
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        captcha_id, image_b64 = generate_captcha()
-        return Response({
-            'captcha_id': captcha_id,
-            'captcha_image': image_b64,
-        })
 
 
 # ──────────────────────────── Registration ────────────────────────────
@@ -38,15 +23,6 @@ class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        # ── CAPTCHA verification ──
-        captcha_id = request.data.get('captcha_id', '')
-        captcha_answer = request.data.get('captcha_answer', '')
-        if not verify_captcha(captcha_id, captcha_answer):
-            return Response(
-                {'captcha': 'Incorrect CAPTCHA answer. Please try again.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -67,15 +43,6 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        # ── CAPTCHA verification ──
-        captcha_id = request.data.get('captcha_id', '')
-        captcha_answer = request.data.get('captcha_answer', '')
-        if not verify_captcha(captcha_id, captcha_answer):
-            return Response(
-                {'captcha': 'Incorrect CAPTCHA answer. Please try again.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']

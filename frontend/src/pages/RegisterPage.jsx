@@ -1,7 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import CustomCursor from '../components/CustomCursor';
-import CaptchaWidget from '../components/CaptchaWidget';
 import API from '../services/api';
 
 export default function RegisterPage() {
@@ -13,43 +12,25 @@ export default function RegisterPage() {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [captchaReset, setCaptchaReset] = useState(0);
-    const captchaRef = useRef({ id: '', answer: '' });
-
-    const handleCaptchaVerify = (id, answer) => {
-        captchaRef.current = { id, answer };
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-
-        if (!captchaRef.current.answer) {
-            setError('Please solve the CAPTCHA before registering.');
-            return;
-        }
-
         setLoading(true);
 
         try {
             await API.post('/auth/register/', {
                 ...form,
                 role,
-                captcha_id: captchaRef.current.id,
-                captcha_answer: captchaRef.current.answer,
             });
             navigate('/login', { state: { registered: true } });
         } catch (err) {
             const msg = err.response?.data;
-            if (msg?.captcha) {
-                setError(msg.captcha);
-            } else if (typeof msg === 'object') {
+            if (typeof msg === 'object') {
                 setError(Object.entries(msg).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | '));
             } else {
                 setError('Registration failed. Please try again.');
             }
-            // Reset captcha on failure
-            setCaptchaReset((c) => c + 1);
         } finally {
             setLoading(false);
         }
@@ -111,12 +92,6 @@ export default function RegisterPage() {
                             <label>Password</label>
                             <input type="password" className="form-input" placeholder="Min 6 characters" value={form.password} onChange={updateField('password')} required minLength={6} />
                         </div>
-
-                        {/* Custom CAPTCHA */}
-                        <CaptchaWidget
-                            onVerify={handleCaptchaVerify}
-                            resetTrigger={captchaReset}
-                        />
 
                         <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
                             {loading ? '⏳ Creating...' : `Register as ${role.charAt(0).toUpperCase() + role.slice(1)}`}
