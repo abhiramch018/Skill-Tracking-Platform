@@ -1,1 +1,1 @@
-web: python manage.py createcachetable --database default && gunicorn backend.wsgi --log-file -
+web: python manage.py migrate && python manage.py createcachetable --database default && gunicorn backend.wsgi --log-file -
