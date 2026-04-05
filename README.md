@@ -1,24 +1,42 @@
+<<<<<<< HEAD
 # 🎓 CertTrack — Certification & Skill Tracking Platform
+=======
+#  CertTrack — Certification & Skill Tracking Platform
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 A full-stack web application that streamlines **certificate management and skill tracking** for academic institutions. Students upload certificates, faculty verify them, and admins gain system-wide analytics — all through role-based dashboards.
 
 ---
 
+<<<<<<< HEAD
 ## ✨ Features
 
 ### 👩‍🎓 Student
+=======
+##  Features
+
+###  Student
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 - Upload certificates with title, organization, category, skill tags & expiry date
 - Track certificate status (Pending / Accepted / Rejected)
 - View performance metrics and analytics
 - Receive expiry alerts for certificates expiring within 30 days
 - Delete pending (unreviewed) certificates
 
+<<<<<<< HEAD
 ### 👨‍🏫 Faculty
+=======
+###  Faculty
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 - View and manage assigned certificates
 - Accept or reject certificates with remarks
 - Review statistics dashboard
 
+<<<<<<< HEAD
 ### 🛡️ Admin
+=======
+###  Admin
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 - View all certificates system-wide
 - System-wide analytics with category breakdown
 - Student leaderboard (top 10 by performance score)
@@ -26,7 +44,11 @@ A full-stack web application that streamlines **certificate management and skill
 
 ---
 
+<<<<<<< HEAD
 ## 🛠️ Tech Stack
+=======
+##  Tech Stack
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 | Layer      | Technology                                                     |
 |------------|----------------------------------------------------------------|
@@ -38,7 +60,11 @@ A full-stack web application that streamlines **certificate management and skill
 
 ---
 
+<<<<<<< HEAD
 ## 📁 Project Structure
+=======
+##  Project Structure
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 ```
 Skill Tracking Platform/
@@ -70,7 +96,11 @@ Skill Tracking Platform/
 
 ---
 
+<<<<<<< HEAD
 ## 🚀 Getting Started
+=======
+##  Getting Started
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 ### Prerequisites
 
@@ -167,7 +197,11 @@ The frontend will be available at **http://localhost:5173**.
 
 ---
 
+<<<<<<< HEAD
 ## 🔐 Authentication
+=======
+##  Authentication
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 The platform uses **Token-based authentication** via Django REST Framework's `TokenAuthentication`. After logging in, include the token in subsequent requests:
 
@@ -177,7 +211,11 @@ Authorization: Token <your-auth-token>
 
 ---
 
+<<<<<<< HEAD
 ## 📜 Certificate Categories
+=======
+##  Certificate Categories
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 | Key | Label |
 |-----|-------|
@@ -192,7 +230,11 @@ Authorization: Token <your-auth-token>
 
 ---
 
+<<<<<<< HEAD
 ## 🌐 Deployment
+=======
+##  Deployment
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 ### Frontend (Vercel)
 
@@ -206,6 +248,10 @@ The `frontend/vercel.json` handles SPA routing. Deploy directly from the `fronte
 
 ---
 
+<<<<<<< HEAD
 ## 📄 License
+=======
+##  License
+>>>>>>> 19d9fde165bfcd19533ed473ece53993a9e8ad04
 
 This project is for educational purposes.
