@@ -1,9 +1,34 @@
+import random
+import string
+from datetime import timedelta
+
+from django.conf import settings
+from django.core.cache import cache
+from django.core.mail import send_mail
+from django.utils import timezone
+
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+
 from .models import CustomUser
 from .serializers import RegisterSerializer, LoginSerializer, UserSerializer, AdminUserSerializer
+from .captcha import generate_captcha, verify_captcha
+
+
+# ──────────────────────── CAPTCHA Endpoint ────────────────────────
+
+class CaptchaView(APIView):
+    """Generate a new CAPTCHA challenge."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        captcha_id, image_b64 = generate_captcha()
+        return Response({
+            'captcha_id': captcha_id,
+            'captcha_image': image_b64,
+        })
 
 
 # ──────────────────────────── Registration ────────────────────────────
@@ -13,16 +38,22 @@ class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        # ── CAPTCHA verification ──
+        captcha_id = request.data.get('captcha_id', '')
+        captcha_answer = request.data.get('captcha_answer', '')
+        if not verify_captcha(captcha_id, captcha_answer):
+            return Response(
+                {'captcha': 'Incorrect CAPTCHA answer. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            # Auto-verify so the user can login immediately
-            user.email_verified = True
-            user.save(update_fields=['email_verified'])
-
             token, _ = Token.objects.get_or_create(user=user)
+
             return Response({
-                'message': 'Registration successful! You can now log in.',
+                'message': 'Registration successful!',
                 'token': token.key,
                 'user': UserSerializer(user).data,
             }, status=status.HTTP_201_CREATED)
@@ -36,6 +67,15 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        # ── CAPTCHA verification ──
+        captcha_id = request.data.get('captcha_id', '')
+        captcha_answer = request.data.get('captcha_answer', '')
+        if not verify_captcha(captcha_id, captcha_answer):
+            return Response(
+                {'captcha': 'Incorrect CAPTCHA answer. Please try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
@@ -86,3 +126,116 @@ class AdminUserListView(APIView):
             return Response({'message': 'User deleted.'}, status=status.HTTP_204_NO_CONTENT)
         except CustomUser.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+# ──────────────────────── Forgot Password ────────────────────────
+
+def _generate_otp():
+    """Generate a 6-digit numeric OTP."""
+    return ''.join(random.choices(string.digits, k=6))
+
+
+def _otp_cache_key(email):
+    """Return a consistent cache key for the given email."""
+    return f'pwd_reset_otp_{email.lower().strip()}'
+
+
+class ForgotPasswordView(APIView):
+    """Send a 6-digit OTP to the user's registered email."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response(
+                {'error': 'Email address is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Look up user by email (case-insensitive)
+        try:
+            user = CustomUser.objects.get(email__iexact=email)
+        except CustomUser.DoesNotExist:
+            # Return a generic success message to prevent email enumeration
+            return Response({
+                'message': 'If an account with that email exists, a reset code has been sent.',
+            })
+
+        otp = _generate_otp()
+
+        # Store OTP in Django's cache for 10 minutes
+        cache.set(_otp_cache_key(email), otp, timeout=600)
+
+        # Send email
+        try:
+            send_mail(
+                subject='CertTrack — Password Reset Code',
+                message=(
+                    f'Hello {user.first_name or user.username},\n\n'
+                    f'Your password reset verification code is:\n\n'
+                    f'    {otp}\n\n'
+                    f'This code is valid for 10 minutes.\n\n'
+                    f'If you did not request a password reset, please ignore this email.\n\n'
+                    f'— The CertTrack Team'
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            return Response(
+                {'error': 'Failed to send email. Please try again later.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response({
+            'message': 'If an account with that email exists, a reset code has been sent.',
+        })
+
+
+class ResetPasswordView(APIView):
+    """Verify OTP and set a new password."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        otp = request.data.get('otp', '').strip()
+        new_password = request.data.get('new_password', '')
+
+        if not email or not otp or not new_password:
+            return Response(
+                {'error': 'Email, OTP, and new password are all required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(new_password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify OTP from cache
+        stored_otp = cache.get(_otp_cache_key(email))
+        if not stored_otp or stored_otp != otp:
+            return Response(
+                {'error': 'Invalid or expired verification code.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find user
+        try:
+            user = CustomUser.objects.get(email__iexact=email)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'error': 'No account found with that email.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+
+        # Clear OTP so it can't be reused
+        cache.delete(_otp_cache_key(email))
+
+        return Response({'message': 'Password has been reset successfully.'})

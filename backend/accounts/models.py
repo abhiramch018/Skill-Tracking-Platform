@@ -13,7 +13,6 @@ class CustomUser(AbstractUser):
 
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
-    email_verified = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'users'

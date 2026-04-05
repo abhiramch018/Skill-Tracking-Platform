@@ -6,11 +6,21 @@ const API = axios.create({
     baseURL: `${BASE}/api`,
 });
 
-// Attach auth token to every request
+// Attach auth token to every request EXCEPT public auth endpoints
+const PUBLIC_PATHS = [
+    '/auth/login/',
+    '/auth/register/',
+    '/auth/forgot-password/',
+    '/auth/reset-password/',
+];
+
 API.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Token ${token}`;
+    const isPublic = PUBLIC_PATHS.some((p) => config.url?.includes(p));
+    if (!isPublic) {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Token ${token}`;
+        }
     }
     return config;
 });

@@ -4,10 +4,19 @@ import { useAuth } from '../context/AuthContext';
 import CustomCursor from '../components/CustomCursor';
 import API from '../services/api';
 
+const CATEGORY_COLORS = {
+    cloud: '#06b6d4', ai_ml: '#8b5cf6', web: '#3b82f6',
+    cyber: '#ef4444', data: '#f59e0b', devops: '#10b981',
+    mobile: '#ec4899', other: '#6b7280',
+};
+
+const FILTER_OPTIONS = ['all', 'pending', 'accepted', 'rejected'];
+
 export default function FacultyDashboard() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('assigned');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [certificates, setCertificates] = useState([]);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -40,12 +49,16 @@ export default function FacultyDashboard() {
             setReviewingId(null);
             setRemarks('');
             fetchData();
-        } catch (err) {
+        } catch {
             setActionMsg({ type: 'error', text: 'Review failed.' });
         }
     };
 
     const handleLogout = () => { logout(); navigate('/'); };
+
+    const filteredCerts = statusFilter === 'all'
+        ? certificates
+        : certificates.filter(c => c.status === statusFilter);
 
     const pendingCerts = certificates.filter(c => c.status === 'pending');
     const reviewedCerts = certificates.filter(c => c.status !== 'pending');
@@ -73,9 +86,8 @@ export default function FacultyDashboard() {
                 </div>
                 <nav className="sidebar-nav">
                     <a className={`sidebar-link ${activeTab === 'assigned' ? 'active' : ''}`} onClick={() => setActiveTab('assigned')}>
-                        📋 Pending Review {stats?.pending > 0 && <span className="badge badge-pending" style={{ marginLeft: 'auto' }}>{stats.pending}</span>}
+                        📋 All Certificates {stats?.pending > 0 && <span className="badge badge-pending" style={{ marginLeft: 'auto' }}>{stats.pending}</span>}
                     </a>
-                    <a className={`sidebar-link ${activeTab === 'reviewed' ? 'active' : ''}`} onClick={() => setActiveTab('reviewed')}>✅ Reviewed</a>
                     <a className={`sidebar-link ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>📊 Statistics</a>
                 </nav>
                 <div className="sidebar-footer">
@@ -96,112 +108,108 @@ export default function FacultyDashboard() {
 
                 {/* Stats Row */}
                 <div className="stats-grid">
-                    <div className="stat-card purple">
-                        <div className="stat-value">{stats?.total_assigned || 0}</div>
-                        <div className="stat-label">Total Assigned</div>
-                    </div>
-                    <div className="stat-card amber">
-                        <div className="stat-value">{stats?.pending || 0}</div>
-                        <div className="stat-label">Pending</div>
-                    </div>
-                    <div className="stat-card green">
-                        <div className="stat-value">{stats?.accepted || 0}</div>
-                        <div className="stat-label">Accepted</div>
-                    </div>
-                    <div className="stat-card pink">
-                        <div className="stat-value">{stats?.rejected || 0}</div>
-                        <div className="stat-label">Rejected</div>
-                    </div>
+                    <div className="stat-card purple"><div className="stat-value">{stats?.total_assigned || 0}</div><div className="stat-label">Total Assigned</div></div>
+                    <div className="stat-card amber"><div className="stat-value">{stats?.pending || 0}</div><div className="stat-label">Pending</div></div>
+                    <div className="stat-card green"><div className="stat-value">{stats?.accepted || 0}</div><div className="stat-label">Accepted</div></div>
+                    <div className="stat-card pink"><div className="stat-value">{stats?.rejected || 0}</div><div className="stat-label">Rejected</div></div>
                 </div>
 
-                {/* Pending Tab */}
+                {/* Certificates Tab with Filter */}
                 {activeTab === 'assigned' && (
                     <>
-                        <div className="page-header">
-                            <h1>Pending Review</h1>
-                            <p>Certificates waiting for your verification</p>
+                        <div className="page-header flex justify-between items-center">
+                            <div>
+                                <h1>Assigned Certificates</h1>
+                                <p>Review and manage student certificates</p>
+                            </div>
                         </div>
 
-                        {pendingCerts.length === 0 ? (
+                        {/* Filter Bar */}
+                        <div className="filter-bar">
+                            {FILTER_OPTIONS.map(f => (
+                                <button
+                                    key={f}
+                                    className={`filter-btn ${statusFilter === f ? 'active' : ''}`}
+                                    onClick={() => setStatusFilter(f)}
+                                >
+                                    {f === 'all' && '📋 All'}
+                                    {f === 'pending' && `⏳ Pending${stats?.pending > 0 ? ` (${stats.pending})` : ''}`}
+                                    {f === 'accepted' && '✅ Accepted'}
+                                    {f === 'rejected' && '❌ Rejected'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {filteredCerts.length === 0 ? (
                             <div className="card text-center" style={{ padding: 60 }}>
-                                <div style={{ fontSize: '3rem', marginBottom: 16 }}>✅</div>
-                                <h3 style={{ marginBottom: 8 }}>All caught up!</h3>
-                                <p style={{ color: 'var(--text-secondary)' }}>No pending certificates to review.</p>
+                                <div style={{ fontSize: '3rem', marginBottom: 16 }}>
+                                    {statusFilter === 'pending' ? '✅' : '📋'}
+                                </div>
+                                <h3 style={{ marginBottom: 8 }}>
+                                    {statusFilter === 'pending' ? 'All caught up!' : `No ${statusFilter} certificates`}
+                                </h3>
+                                <p style={{ color: 'var(--text-secondary)' }}>
+                                    {statusFilter === 'pending' ? 'No pending certificates to review.' : 'Nothing to show here yet.'}
+                                </p>
                             </div>
                         ) : (
-                            pendingCerts.map((cert) => (
+                            filteredCerts.map((cert) => (
                                 <div key={cert.id} className="cert-card">
                                     <div className="cert-card-header">
-                                        <h3>{cert.title}</h3>
-                                        <span className="badge badge-pending">Pending</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                            <h3>{cert.title}</h3>
+                                            {cert.category && cert.category !== 'other' && (
+                                                <span className="skill-category-badge" style={{
+                                                    background: CATEGORY_COLORS[cert.category] + '22',
+                                                    color: CATEGORY_COLORS[cert.category],
+                                                    border: `1px solid ${CATEGORY_COLORS[cert.category]}44`
+                                                }}>
+                                                    {cert.category_display}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className={`badge badge-${cert.status}`}>{cert.status}</span>
                                     </div>
                                     <div className="cert-card-meta">
-                                        <span>👤 Student: {cert.student_name}</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>👤 {cert.student_name}</span>
                                         <span>🏢 {cert.organization}</span>
                                         <span>📅 Issued: {cert.issue_date}</span>
                                         {cert.expiry_date && <span>⏰ Expires: {cert.expiry_date}</span>}
                                     </div>
+                                    {cert.skill_tags && (
+                                        <div className="skill-tags-row">
+                                            {cert.skill_tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                                                <span key={tag} className="skill-tag">#{tag}</span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {cert.remarks && <div className="cert-card-remarks">💬 {cert.remarks}</div>}
 
                                     <div className="cert-card-actions">
                                         <a href={cert.file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
                                             📄 View File
                                         </a>
-                                        {reviewingId === cert.id ? (
-                                            <div style={{ flex: 1 }}>
-                                                <textarea
-                                                    className="form-input"
-                                                    placeholder="Add remarks (optional)..."
-                                                    value={remarks}
-                                                    onChange={(e) => setRemarks(e.target.value)}
-                                                    style={{ marginBottom: 8, minHeight: 60 }}
-                                                />
-                                                <div className="flex gap-2">
-                                                    <button className="btn btn-success btn-sm" onClick={() => handleReview(cert.id, 'accepted')}>✅ Accept</button>
-                                                    <button className="btn btn-danger btn-sm" onClick={() => handleReview(cert.id, 'rejected')}>❌ Reject</button>
-                                                    <button className="btn btn-secondary btn-sm" onClick={() => { setReviewingId(null); setRemarks(''); }}>Cancel</button>
+                                        {cert.status === 'pending' && (
+                                            reviewingId === cert.id ? (
+                                                <div style={{ flex: 1 }}>
+                                                    <textarea
+                                                        className="form-input"
+                                                        placeholder="Add remarks (optional)..."
+                                                        value={remarks}
+                                                        onChange={(e) => setRemarks(e.target.value)}
+                                                        style={{ marginBottom: 8, minHeight: 60 }}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <button className="btn btn-success btn-sm" onClick={() => handleReview(cert.id, 'accepted')}>✅ Accept</button>
+                                                        <button className="btn btn-danger btn-sm" onClick={() => handleReview(cert.id, 'rejected')}>❌ Reject</button>
+                                                        <button className="btn btn-secondary btn-sm" onClick={() => { setReviewingId(null); setRemarks(''); }}>Cancel</button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <button className="btn btn-primary btn-sm" onClick={() => setReviewingId(cert.id)}>🔍 Review</button>
+                                            ) : (
+                                                <button className="btn btn-primary btn-sm" onClick={() => setReviewingId(cert.id)}>🔍 Review</button>
+                                            )
                                         )}
                                     </div>
-                                </div>
-                            ))
-                        )}
-                    </>
-                )}
-
-                {/* Reviewed Tab */}
-                {activeTab === 'reviewed' && (
-                    <>
-                        <div className="page-header">
-                            <h1>Reviewed Certificates</h1>
-                            <p>Previously accepted or rejected certificates</p>
-                        </div>
-
-                        {reviewedCerts.length === 0 ? (
-                            <div className="card text-center" style={{ padding: 60 }}>
-                                <div style={{ fontSize: '3rem', marginBottom: 16 }}>📋</div>
-                                <h3>No reviewed certificates yet</h3>
-                            </div>
-                        ) : (
-                            reviewedCerts.map((cert) => (
-                                <div key={cert.id} className="cert-card">
-                                    <div className="cert-card-header">
-                                        <h3>{cert.title}</h3>
-                                        <span className={`badge badge-${cert.status}`}>{cert.status}</span>
-                                    </div>
-                                    <div className="cert-card-meta">
-                                        <span>👤 {cert.student_name}</span>
-                                        <span>🏢 {cert.organization}</span>
-                                        <span>📅 {cert.issue_date}</span>
-                                    </div>
-                                    <div className="cert-card-actions">
-                                        <a href={cert.file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
-                                            📄 View File
-                                        </a>
-                                    </div>
-                                    {cert.remarks && <div className="cert-card-remarks">💬 {cert.remarks}</div>}
                                 </div>
                             ))
                         )}
@@ -215,10 +223,8 @@ export default function FacultyDashboard() {
                             <h1>Review Statistics</h1>
                             <p>Your certification review overview</p>
                         </div>
-
                         <div className="card" style={{ maxWidth: 600, margin: '0 auto' }}>
                             <h3 style={{ marginBottom: 24 }} className="section-title">📊 Overview</h3>
-
                             {[
                                 { label: 'Total Assigned', val: stats?.total_assigned, color: 'var(--accent-purple)' },
                                 { label: 'Accepted', val: stats?.accepted, color: 'var(--accent-green)' },

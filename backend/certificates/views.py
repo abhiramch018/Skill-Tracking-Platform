@@ -49,6 +49,28 @@ class StudentCertificateListView(APIView):
         return Response(serializer.data)
 
 
+class CertificateDeleteView(APIView):
+    """Student can delete their own PENDING certificate."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        if request.user.role != 'student':
+            return Response({'error': 'Student access required.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            cert = Certificate.objects.get(pk=pk, student=request.user)
+        except Certificate.DoesNotExist:
+            return Response({'error': 'Certificate not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if cert.status != 'pending':
+            return Response(
+                {'error': 'Only pending certificates can be deleted.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cert.delete()
+        return Response({'message': 'Certificate deleted successfully.'}, status=status.HTTP_200_OK)
+
+
 class StudentPerformanceView(APIView):
     """Returns performance metrics for the current student."""
     permission_classes = [permissions.IsAuthenticated]
@@ -172,10 +194,47 @@ class AdminAnalyticsView(APIView):
             total_assigned=Count('assigned_certificates'),
         ).values('id', 'username', 'first_name', 'last_name', 'pending_count', 'total_assigned')
 
+        # Category breakdown
+        from .models import Certificate as Cert
+        category_data = []
+        for code, label in Cert.CATEGORY_CHOICES:
+            count = Certificate.objects.filter(category=code).count()
+            category_data.append({'code': code, 'label': label, 'count': count})
+
         return Response({
             'total_certificates': total_certs,
             'certificates_by_status': certs_by_status,
             'total_students': total_students,
             'total_faculty': total_faculty,
             'faculty_workload': list(faculty_workload),
+            'certificates_by_category': category_data,
         })
+
+
+class TopStudentsView(APIView):
+    """Admin views top 10 students ranked by performance score."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != 'admin':
+            return Response({'error': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+
+        students = CustomUser.objects.filter(role='student')
+        leaderboard = []
+        for student in students:
+            perf = calculate_performance(student)
+            leaderboard.append({
+                'id': student.id,
+                'name': f"{student.first_name} {student.last_name}".strip() or student.username,
+                'username': student.username,
+                'email': student.email,
+                'score': perf['score'],
+                'accepted': perf['accepted'],
+                'rejected': perf['rejected'],
+                'total': perf['total'],
+            })
+
+        # Sort by score descending, then by accepted count
+        leaderboard.sort(key=lambda x: (-x['score'], -x['accepted']))
+        return Response(leaderboard[:10])
+

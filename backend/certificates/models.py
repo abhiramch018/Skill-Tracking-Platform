@@ -11,6 +11,17 @@ class Certificate(models.Model):
         ('rejected', 'Rejected'),
     )
 
+    CATEGORY_CHOICES = (
+        ('cloud', 'Cloud Computing'),
+        ('ai_ml', 'AI / Machine Learning'),
+        ('web', 'Web Development'),
+        ('cyber', 'Cybersecurity'),
+        ('data', 'Data Science & Analytics'),
+        ('devops', 'DevOps & CI/CD'),
+        ('mobile', 'Mobile Development'),
+        ('other', 'Other'),
+    )
+
     student = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -25,6 +36,9 @@ class Certificate(models.Model):
     )
     title = models.CharField(max_length=255)
     organization = models.CharField(max_length=255)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    skill_tags = models.CharField(max_length=300, blank=True, default='',
+                                  help_text='Comma-separated skill tags, e.g. Python, AWS, Docker')
     issue_date = models.DateField()
     expiry_date = models.DateField(null=True, blank=True)
     file = models.FileField(upload_to='certificates/')

@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import CustomCursor from '../components/CustomCursor';
 import API from '../services/api';
 
+const MEDAL = ['🥇', '🥈', '🥉'];
+
 export default function AdminDashboard() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
@@ -11,6 +13,7 @@ export default function AdminDashboard() {
     const [analytics, setAnalytics] = useState(null);
     const [users, setUsers] = useState([]);
     const [allCerts, setAllCerts] = useState([]);
+    const [leaderboard, setLeaderboard] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionMsg, setActionMsg] = useState({ type: '', text: '' });
 
@@ -19,14 +22,16 @@ export default function AdminDashboard() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [analyticsRes, usersRes, certsRes] = await Promise.all([
+            const [analyticsRes, usersRes, certsRes, lbRes] = await Promise.all([
                 API.get('/certificates/analytics/'),
                 API.get('/auth/users/'),
                 API.get('/certificates/all/'),
+                API.get('/certificates/leaderboard/'),
             ]);
             setAnalytics(analyticsRes.data);
             setUsers(usersRes.data);
             setAllCerts(certsRes.data);
+            setLeaderboard(lbRes.data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -73,6 +78,7 @@ export default function AdminDashboard() {
                 </div>
                 <nav className="sidebar-nav">
                     <a className={`sidebar-link ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>📊 Analytics</a>
+                    <a className={`sidebar-link ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>🏆 Leaderboard</a>
                     <a className={`sidebar-link ${activeTab === 'certificates' ? 'active' : ''}`} onClick={() => setActiveTab('certificates')}>📜 Certificates</a>
                     <a className={`sidebar-link ${activeTab === 'students' ? 'active' : ''}`} onClick={() => setActiveTab('students')}>🎓 Students</a>
                     <a className={`sidebar-link ${activeTab === 'faculty' ? 'active' : ''}`} onClick={() => setActiveTab('faculty')}>👨‍🏫 Faculty</a>
@@ -103,25 +109,13 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="stats-grid">
-                            <div className="stat-card purple">
-                                <div className="stat-value">{analytics?.total_certificates || 0}</div>
-                                <div className="stat-label">Total Certificates</div>
-                            </div>
-                            <div className="stat-card green">
-                                <div className="stat-value">{analytics?.total_students || 0}</div>
-                                <div className="stat-label">Total Students</div>
-                            </div>
-                            <div className="stat-card amber">
-                                <div className="stat-value">{analytics?.total_faculty || 0}</div>
-                                <div className="stat-label">Total Faculty</div>
-                            </div>
-                            <div className="stat-card pink">
-                                <div className="stat-value">{users.length}</div>
-                                <div className="stat-label">Total Users</div>
-                            </div>
+                            <div className="stat-card purple"><div className="stat-value">{analytics?.total_certificates || 0}</div><div className="stat-label">Total Certificates</div></div>
+                            <div className="stat-card green"><div className="stat-value">{analytics?.total_students || 0}</div><div className="stat-label">Total Students</div></div>
+                            <div className="stat-card amber"><div className="stat-value">{analytics?.total_faculty || 0}</div><div className="stat-label">Total Faculty</div></div>
+                            <div className="stat-card pink"><div className="stat-value">{users.length}</div><div className="stat-label">Total Users</div></div>
                         </div>
 
-                        {/* Certificate Distribution */}
+                        {/* Certificate Status Distribution */}
                         <div className="card" style={{ marginBottom: 24 }}>
                             <h3 className="section-title">📊 Certificate Status Distribution</h3>
                             {analytics?.certificates_by_status && (
@@ -147,6 +141,74 @@ export default function AdminDashboard() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Category Distribution */}
+                        {analytics?.certificates_by_category && analytics.certificates_by_category.some(c => c.count > 0) && (
+                            <div className="card">
+                                <h3 className="section-title">🏷️ Certificates by Category</h3>
+                                {analytics.certificates_by_category
+                                    .filter(c => c.count > 0)
+                                    .sort((a, b) => b.count - a.count)
+                                    .map(({ code, label, count }) => (
+                                        <div key={code} style={{ marginBottom: 14 }}>
+                                            <div className="flex justify-between items-center" style={{ marginBottom: 5 }}>
+                                                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{label}</span>
+                                                <span style={{ fontWeight: 700, color: 'var(--accent-purple)' }}>{count}</span>
+                                            </div>
+                                            <div className="progress-bar-container">
+                                                <div className="progress-bar-fill" style={{
+                                                    width: `${analytics.total_certificates ? (count / analytics.total_certificates * 100) : 0}%`,
+                                                }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Leaderboard Tab */}
+                {activeTab === 'leaderboard' && (
+                    <>
+                        <div className="page-header">
+                            <h1>🏆 Student Leaderboard</h1>
+                            <p>Top 10 students ranked by performance score</p>
+                        </div>
+
+                        {leaderboard.length === 0 ? (
+                            <div className="card text-center" style={{ padding: 60 }}>
+                                <div style={{ fontSize: '3rem', marginBottom: 16 }}>🏆</div>
+                                <h3>No student data yet</h3>
+                                <p style={{ color: 'var(--text-secondary)' }}>Leaderboard will populate once students upload certificates.</p>
+                            </div>
+                        ) : (
+                            <div className="leaderboard-list">
+                                {leaderboard.map((s, i) => (
+                                    <div key={s.id} className={`leaderboard-row ${i < 3 ? 'top-three' : ''}`}>
+                                        <div className="leaderboard-rank">
+                                            {i < 3 ? (
+                                                <span className="medal">{MEDAL[i]}</span>
+                                            ) : (
+                                                <span className="rank-num">#{i + 1}</span>
+                                            )}
+                                        </div>
+                                        <div className="leaderboard-info">
+                                            <div className="leaderboard-name">{s.name}</div>
+                                            <div className="leaderboard-username">@{s.username}</div>
+                                        </div>
+                                        <div className="leaderboard-stats">
+                                            <span className="lb-stat green">✅ {s.accepted}</span>
+                                            <span className="lb-stat pink">❌ {s.rejected}</span>
+                                            <span className="lb-stat muted">📜 {s.total}</span>
+                                        </div>
+                                        <div className="leaderboard-score">
+                                            <span className="score-value text-gradient">{s.score}</span>
+                                            <span className="score-label">pts</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </>
                 )}
 
@@ -157,7 +219,6 @@ export default function AdminDashboard() {
                             <h1>All Certificates</h1>
                             <p>{allCerts.length} total certificates in the system</p>
                         </div>
-
                         {allCerts.length === 0 ? (
                             <div className="card text-center" style={{ padding: 60 }}>
                                 <div style={{ fontSize: '3rem', marginBottom: 16 }}>📜</div>
@@ -177,6 +238,13 @@ export default function AdminDashboard() {
                                         {cert.expiry_date && <span>⏰ Expires: {cert.expiry_date}</span>}
                                         <span>👨‍🏫 Faculty: {cert.faculty_name}</span>
                                     </div>
+                                    {cert.skill_tags && (
+                                        <div className="skill-tags-row">
+                                            {cert.skill_tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                                                <span key={tag} className="skill-tag">#{tag}</span>
+                                            ))}
+                                        </div>
+                                    )}
                                     <div className="cert-card-actions">
                                         <a href={cert.file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
                                             📄 View File
@@ -200,12 +268,8 @@ export default function AdminDashboard() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Joined</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
+                                        <th>Name</th><th>Username</th><th>Email</th>
+                                        <th>Joined</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -216,9 +280,7 @@ export default function AdminDashboard() {
                                             <td>{u.email}</td>
                                             <td>{new Date(u.date_joined).toLocaleDateString()}</td>
                                             <td><span className={`badge ${u.is_active ? 'badge-accepted' : 'badge-rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                                            <td>
-                                                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id, u.username)}>🗑️</button>
-                                            </td>
+                                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id, u.username)}>🗑️</button></td>
                                         </tr>
                                     ))}
                                     {students.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>No students registered</td></tr>}
@@ -239,12 +301,8 @@ export default function AdminDashboard() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Name</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Joined</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
+                                        <th>Name</th><th>Username</th><th>Email</th>
+                                        <th>Joined</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -255,9 +313,7 @@ export default function AdminDashboard() {
                                             <td>{u.email}</td>
                                             <td>{new Date(u.date_joined).toLocaleDateString()}</td>
                                             <td><span className={`badge ${u.is_active ? 'badge-accepted' : 'badge-rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                                            <td>
-                                                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id, u.username)}>🗑️</button>
-                                            </td>
+                                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id, u.username)}>🗑️</button></td>
                                         </tr>
                                     ))}
                                     {faculty.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>No faculty registered</td></tr>}
@@ -274,14 +330,12 @@ export default function AdminDashboard() {
                             <h1>Faculty Workload</h1>
                             <p>Current assignment distribution (max 5 pending per faculty)</p>
                         </div>
-
                         {analytics?.faculty_workload?.length > 0 ? (
                             <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                                 {analytics.faculty_workload.map((f) => (
                                     <div key={f.id} className="card">
                                         <h3 style={{ marginBottom: 4 }}>{f.first_name} {f.last_name}</h3>
                                         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>@{f.username}</p>
-
                                         <div className="flex justify-between items-center" style={{ marginBottom: 6 }}>
                                             <span style={{ fontSize: '0.85rem' }}>Pending Slots</span>
                                             <span style={{ fontWeight: 700, color: f.pending_count >= 5 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
@@ -294,7 +348,6 @@ export default function AdminDashboard() {
                                                 background: f.pending_count >= 5 ? 'linear-gradient(135deg, var(--accent-red), #dc2626)' : 'var(--gradient-cool)'
                                             }} />
                                         </div>
-
                                         <div className="flex justify-between" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                                             <span>Total Assigned: {f.total_assigned}</span>
                                             <span className={`badge ${f.pending_count >= 5 ? 'badge-rejected' : 'badge-accepted'}`}>

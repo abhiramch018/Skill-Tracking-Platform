@@ -8,12 +8,14 @@ class CertificateSerializer(serializers.ModelSerializer):
     """Full certificate details with nested student/faculty info."""
     student_name = serializers.SerializerMethodField()
     faculty_name = serializers.SerializerMethodField()
+    category_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
         fields = [
             'id', 'student', 'student_name', 'faculty', 'faculty_name',
-            'title', 'organization', 'issue_date', 'expiry_date',
+            'title', 'organization', 'category', 'category_display', 'skill_tags',
+            'issue_date', 'expiry_date',
             'file', 'status', 'remarks', 'created_at'
         ]
         read_only_fields = ['id', 'student', 'faculty', 'status', 'remarks', 'created_at']
@@ -26,13 +28,16 @@ class CertificateSerializer(serializers.ModelSerializer):
             return f"{obj.faculty.first_name} {obj.faculty.last_name}".strip() or obj.faculty.username
         return "Not assigned"
 
+    def get_category_display(self, obj):
+        return obj.get_category_display()
+
 
 class CertificateUploadSerializer(serializers.ModelSerializer):
     """Serializer for uploading a new certificate."""
 
     class Meta:
         model = Certificate
-        fields = ['title', 'organization', 'issue_date', 'expiry_date', 'file']
+        fields = ['title', 'organization', 'category', 'skill_tags', 'issue_date', 'expiry_date', 'file']
 
     def validate_file(self, value):
         allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png']
@@ -69,3 +74,4 @@ class CertificateReviewSerializer(serializers.Serializer):
     """Serializer for faculty reviewing (accept/reject) a certificate."""
     status = serializers.ChoiceField(choices=['accepted', 'rejected'])
     remarks = serializers.CharField(required=False, allow_blank=True, default='')
+
