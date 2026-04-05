@@ -69,19 +69,16 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-# Database — uses DATABASE_URL env var on Railway, falls back to local PostgreSQL
+# Database — uses DATABASE_URL env var (Render PostgreSQL), falls back to SQLite for testing
 _db_url = os.environ.get('DATABASE_URL')
 if _db_url:
     DATABASES = {'default': dj_database_url.parse(_db_url, conn_max_age=600)}
 else:
+    # Fall back to SQLite for development/testing
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'cert_tracker_db',
-            'USER': 'postgres',
-            'PASSWORD': 'Abhiram@2006',
-            'HOST': 'localhost',
-            'PORT': '5432',
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
