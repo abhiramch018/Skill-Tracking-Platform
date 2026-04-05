@@ -13,7 +13,13 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-cert-tracker-sk3y-ch@
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS', '')
-ALLOWED_HOSTS = ['*'] if DEBUG else [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    _hosts = [h.strip() for h in ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+    # Always allow Render domain
+    _hosts.append('.onrender.com')
+    ALLOWED_HOSTS = _hosts
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -79,6 +85,16 @@ else:
         }
     }
 
+# Cache — use database-backed cache in production (shared across Gunicorn workers)
+# For local development LocMemCache (default) is fine.
+if not DEBUG:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache_table',
+        }
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -117,8 +133,16 @@ REST_FRAMEWORK = {
 
 # CORS settings
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-CORS_ALLOWED_ORIGINS = [FRONTEND_URL] if not DEBUG else []
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        FRONTEND_URL,
+    ]
+    # Allow any Vercel preview URLs if needed
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r'^https://.*\.vercel\.app$',
+    ]
 CORS_ALLOW_CREDENTIALS = True
 
 # Email settings (Gmail SMTP)

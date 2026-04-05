@@ -1,29 +1,50 @@
 """
 Custom CAPTCHA generator — simple, readable math-challenge images using Pillow.
-Stores answers in-memory with expiration (5 minutes).
+Stores answers in Django's cache framework (works across Gunicorn workers).
 """
 
 import io
 import random
 import uuid
-import time
 import base64
-import threading
 from PIL import Image, ImageDraw, ImageFont
 
+from django.core.cache import cache
 
-# ── In-memory store: { captcha_id: (answer, created_at) }
-_captcha_store = {}
-_store_lock = threading.Lock()
 CAPTCHA_TTL = 300  # 5 minutes
 
 
-def _cleanup_expired():
-    """Remove expired captcha entries."""
-    now = time.time()
-    expired = [k for k, (_, ts) in _captcha_store.items() if now - ts > CAPTCHA_TTL]
-    for k in expired:
-        _captcha_store.pop(k, None)
+def _cache_key(captcha_id):
+    """Return a consistent cache key for the given captcha_id."""
+    return f'captcha_{captcha_id}'
+
+
+def _get_font(size=34):
+    """Load the best available font, with cross-platform fallbacks."""
+    font_paths = [
+        # Linux (Render, Ubuntu, Debian)
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        # Windows
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/verdana.ttf",
+        # macOS
+        "/System/Library/Fonts/Helvetica.ttc",
+    ]
+    for fp in font_paths:
+        try:
+            return ImageFont.truetype(fp, size)
+        except (IOError, OSError):
+            continue
+
+    # Pillow >= 10.1 supports size parameter
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def generate_captcha():
@@ -31,7 +52,7 @@ def generate_captcha():
     Generate a simple math-based CAPTCHA image.
     Returns (captcha_id: str, image_base64: str).
     """
-    # ── Simple addition only, small numbers ──
+    # ── Simple addition, small numbers ──
     a = random.randint(1, 9)
     b = random.randint(1, 9)
     answer = a + b
@@ -43,29 +64,9 @@ def generate_captcha():
     img = Image.new('RGB', (width, height), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # ── Load font ──
-    font = None
-    font_paths = [
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/verdana.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    ]
-    for fp in font_paths:
-        try:
-            font = ImageFont.truetype(fp, 34)
-            break
-        except (IOError, OSError):
-            continue
+    font = _get_font(34)
 
-    if font is None:
-        try:
-            font = ImageFont.load_default(size=28)
-        except TypeError:
-            font = ImageFont.load_default()
-
-    # ── Light background lines (just 2-3, subtle) ──
+    # ── Light background lines (subtle noise) ──
     for _ in range(random.randint(2, 3)):
         x1, y1 = random.randint(0, width), random.randint(0, height)
         x2, y2 = random.randint(0, width), random.randint(0, height)
@@ -79,10 +80,14 @@ def generate_captcha():
     y = (height - text_h) // 2
 
     # Dark readable color
-    text_color = (random.randint(30, 70), random.randint(30, 70), random.randint(80, 130))
+    text_color = (
+        random.randint(30, 70),
+        random.randint(30, 70),
+        random.randint(80, 130),
+    )
     draw.text((x, y), challenge_text, fill=text_color, font=font)
 
-    # ── A few small dots for mild texture ──
+    # ── Small dots for mild texture ──
     for _ in range(30):
         dx, dy = random.randint(0, width - 1), random.randint(0, height - 1)
         draw.point((dx, dy), fill=(180, 190, 210))
@@ -93,11 +98,9 @@ def generate_captcha():
     buffer.seek(0)
     image_b64 = base64.b64encode(buffer.read()).decode('utf-8')
 
-    # ── Store answer ──
+    # ── Store answer in Django cache (shared across workers) ──
     captcha_id = str(uuid.uuid4())
-    with _store_lock:
-        _cleanup_expired()
-        _captcha_store[captcha_id] = (str(answer), time.time())
+    cache.set(_cache_key(captcha_id), str(answer), timeout=CAPTCHA_TTL)
 
     return captcha_id, image_b64
 
@@ -110,16 +113,12 @@ def verify_captcha(captcha_id: str, user_answer: str) -> bool:
     if not captcha_id or not user_answer:
         return False
 
-    with _store_lock:
-        entry = _captcha_store.pop(captcha_id, None)
-
-    if entry is None:
+    # Fetch and delete from cache (one-time use)
+    correct_answer = cache.get(_cache_key(captcha_id))
+    if correct_answer is None:
         return False
 
-    correct_answer, created_at = entry
-
-    # Check expiration
-    if time.time() - created_at > CAPTCHA_TTL:
-        return False
+    # Delete so it can't be reused
+    cache.delete(_cache_key(captcha_id))
 
     return user_answer.strip() == correct_answer
